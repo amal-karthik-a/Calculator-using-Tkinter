@@ -1,0 +1,637 @@
+import customtkinter as ctk
+import tkinter as tk
+from math import sin, cos, tan, asin, acos, atan, log, log10, exp, factorial, pi, e, sqrt
+import numpy as np
+from fractions import Fraction
+from tkinter import messagebox
+import re
+
+class ScientificCalculator(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Scientific Calculator")
+        self.geometry("700x900")
+        self.resizable(False, False)
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+
+        self.expression = ""
+        self.history = []
+        self.angle_mode = "deg"  # Default to degrees
+        self.memory = 0
+        self.current_mode = "Basic"
+        self.fraction_mode = False  # Toggle for fractional output
+
+        self.create_widgets()
+
+    def create_widgets(self):
+        # Mode selection dropdown
+        self.mode_frame = ctk.CTkFrame(self, width=680, height=50)
+        self.mode_frame.grid(row=0, column=0, padx=10, pady=5, columnspan=6)
+        self.mode_menu = ctk.CTkOptionMenu(self.mode_frame, values=["Basic", "Scientific", "Area", "Volume", "TSA", "SA"],
+                                           command=self.switch_mode)
+        self.mode_menu.grid(row=0, column=0, padx=5, pady=5)
+
+        # Display frame
+        self.display_frame = ctk.CTkFrame(self, width=680, height=100)
+        self.display_frame.grid(row=1, column=0, padx=10, pady=5, columnspan=6)
+
+        self.display = ctk.CTkEntry(self.display_frame, width=680, height=50, font=("Helvetica", 24), justify="right")
+        self.display.grid(row=0, column=0, padx=5, pady=5)
+        self.display.insert(0, "0")
+
+        self.mode_label = ctk.CTkLabel(self.display_frame, text="DEG", font=("Helvetica", 12))
+        self.mode_label.grid(row=1, column=0, sticky="w", padx=5)
+
+        # History frame
+        self.history_frame = ctk.CTkFrame(self, width=680, height=150)
+        self.history_frame.grid(row=2, column=0, padx=10, pady=5, columnspan=6)
+        self.history_text = ctk.CTkTextbox(self.history_frame, width=680, height=150, font=("Helvetica", 12))
+        self.history_text.grid(row=0, column=0, padx=5, pady=5)
+        self.history_text.insert("end", "History:\n")
+        self.history_text.configure(state="disabled")
+
+        # Button frame
+        self.button_frame = ctk.CTkFrame(self, width=680, height=550)
+        self.button_frame.grid(row=3, column=0, padx=10, pady=10, columnspan=6)
+        self.update_buttons()
+
+    def switch_mode(self, mode):
+        self.current_mode = mode
+        self.mode_label.configure(text="DEG" if mode == "Scientific" and not self.fraction_mode else "FRAC" if self.fraction_mode else "")
+        self.update_buttons()
+
+    def update_buttons(self):
+        # Clear existing buttons
+        for widget in self.button_frame.winfo_children():
+            widget.destroy()
+
+        # Define button layouts for each mode
+        button_layouts = {
+            "Basic": [
+                ("7", 0, 0), ("8", 0, 1), ("9", 0, 2), ("/", 0, 3), ("C", 0, 4), ("DEL", 0, 5),
+                ("4", 1, 0), ("5", 1, 1), ("6", 1, 2), ("*", 1, 3), ("M+", 1, 4), ("MR", 1, 5),
+                ("1", 2, 0), ("2", 2, 1), ("3", 2, 2), ("-", 2, 3), ("M-", 2, 4), ("MC", 2, 5),
+                ("0", 3, 0), (".", 3, 1), ("±", 3, 2), ("+", 3, 3), ("=", 3, 4), ("%", 3, 5),
+            ],
+            "Scientific": [
+                ("sin", 0, 0), ("cos", 0, 1), ("tan", 0, 2), ("sin⁻¹", 0, 3), ("cos⁻¹", 0, 4), ("tan⁻¹", 0, 5),
+                ("ln", 1, 0), ("log", 1, 1), ("e^x", 1, 2), ("10^x", 1, 3), ("x^y", 1, 4), ("!", 1, 5),
+                ("π", 2, 0), ("e", 2, 1), ("√", 2, 2), ("x²", 2, 3), ("(", 2, 4), (")", 2, 5),
+                ("7", 3, 0), ("8", 3, 1), ("9", 3, 2), ("/", 3, 3), ("C", 3, 4), ("DEL", 3, 5),
+                ("4", 4, 0), ("5", 4, 1), ("6", 4, 2), ("*", 4, 3), ("Poly", 4, 4), ("Roots", 4, 5),
+                ("1", 5, 0), ("2", 5, 1), ("3", 5, 2), ("-", 5, 3), ("Matrix", 5, 4), ("Frac", 5, 5),
+                ("0", 6, 0), (".", 6, 1), ("±", 6, 2), ("+", 6, 3), ("=", 6, 4), ("%", 6, 5),
+            ],
+            "Area": [
+                ("Triangle", 0, 0), ("Rectangle", 0, 1), ("Circle", 0, 2), ("Square", 0, 3), ("C", 0, 4), ("DEL", 0, 5),
+                ("7", 1, 0), ("8", 1, 1), ("9", 1, 2), ("/", 1, 3), ("M+", 1, 4), ("MR", 1, 5),
+                ("4", 2, 0), ("5", 2, 1), ("6", 2, 2), ("*", 2, 3), ("M-", 2, 4), ("MC", 2, 5),
+                ("1", 3, 0), ("2", 3, 1), ("3", 3, 2), ("-", 3, 3), ("Perimeter", 3, 4), ("=", 3, 5),
+                ("0", 4, 0), (".", 4, 1), ("±", 4, 2), ("+", 4, 3), ("Back", 4, 4), ("%", 4, 5),
+            ],
+            "Volume": [
+                ("Cube", 0, 0), ("Cuboid", 0, 1), ("Sphere", 0, 2), ("Cylinder", 0, 3), ("C", 0, 4), ("DEL", 0, 5),
+                ("7", 1, 0), ("8", 1, 1), ("9", 1, 2), ("/", 1, 3), ("M+", 1, 4), ("MR", 1, 5),
+                ("4", 2, 0), ("5", 2, 1), ("6", 2, 2), ("*", 2, 3), ("M-", 2, 4), ("MC", 2, 5),
+                ("1", 3, 0), ("2", 3, 1), ("3", 3, 2), ("-", 3, 3), ("=", 3, 4), ("%", 3, 5),
+                ("0", 4, 0), (".", 4, 1), ("±", 4, 2), ("+", 4, 3), ("Back", 4, 4), ("%", 4, 5),
+            ],
+            "TSA": [
+                ("Cube", 0, 0), ("Cuboid", 0, 1), ("Sphere", 0, 2), ("Cylinder", 0, 3), ("C", 0, 4), ("DEL", 0, 5),
+                ("7", 1, 0), ("8", 1, 1), ("9", 1, 2), ("/", 1, 3), ("M+", 1, 4), ("MR", 1, 5),
+                ("4", 2, 0), ("5", 2, 1), ("6", 2, 2), ("*", 2, 3), ("M-", 2, 4), ("MC", 2, 5),
+                ("1", 3, 0), ("2", 3, 1), ("3", 3, 2), ("-", 3, 3), ("=", 3, 4), ("%", 3, 5),
+                ("0", 4, 0), (".", 4, 1), ("±", 4, 2), ("+", 4, 3), ("Back", 4, 4), ("%", 4, 5),
+            ],
+            "SA": [
+                ("Cube", 0, 0), ("Cuboid", 0, 1), ("Sphere", 0, 2), ("Cylinder", 0, 3), ("C", 0, 4), ("DEL", 0, 5),
+                ("7", 1, 0), ("8", 1, 1), ("9", 1, 2), ("/", 1, 3), ("M+", 1, 4), ("MR", 1, 5),
+                ("4", 2, 0), ("5", 2, 1), ("6", 2, 2), ("*", 2, 3), ("M-", 2, 4), ("MC", 2, 5),
+                ("1", 3, 0), ("2", 3, 1), ("3", 3, 2), ("-", 3, 3), ("=", 3, 4), ("%", 3, 5),
+                ("0", 4, 0), (".", 4, 1), ("±", 4, 2), ("+", 4, 3), ("Back", 4, 4), ("%", 4, 5),
+            ]
+        }
+
+        buttons = button_layouts.get(self.current_mode, [])
+        for (text, row, col) in buttons:
+            cmd = lambda x=text: self.button_click(x)
+            btn = ctk.CTkButton(self.button_frame, text=text, width=80, height=50, font=("Helvetica", 14),
+                                command=cmd)
+            btn.grid(row=row, column=col, padx=5, pady=5)
+
+    def parse_fraction(self, expr):
+        """Convert mixed fractions (e.g., '2 3/4') or fractions (e.g., '3/4') to float."""
+        try:
+            expr = expr.strip()
+            if '/' in expr:
+                if ' ' in expr:  # Mixed fraction, e.g., "2 3/4"
+                    whole, frac = expr.split(' ', 1)
+                    if not whole.isdigit() or not frac:
+                        raise ValueError("Invalid mixed fraction format")
+                    num, denom = map(int, frac.split('/'))
+                    if denom == 0:
+                        raise ValueError("Denominator cannot be zero")
+                    return float(whole) + num / denom
+                else:  # Simple fraction, e.g., "3/4"
+                    num, denom = map(int, expr.split('/'))
+                    if denom == 0:
+                        raise ValueError("Denominator cannot be zero")
+                    return num / denom
+            return float(expr)
+        except Exception as exc:
+            raise ValueError(f"Invalid fraction: {str(exc)}")
+
+    def to_mixed_fraction(self, value):
+        """Convert a float to a mixed fraction string (e.g., 2.75 -> '2 3/4')."""
+        if not isinstance(value, (int, float)):
+            return str(value)
+        if value.is_integer():
+            return str(int(value))
+        frac = Fraction(value).limit_denominator(1000)  # Increased limit for precision
+        whole = int(value // 1)
+        num = frac.numerator - whole * frac.denominator
+        if whole == 0:
+            return f"{num}/{frac.denominator}"
+        return f"{whole} {abs(num)}/{frac.denominator}" if num != 0 else str(whole)
+
+    def evaluate_expression(self):
+        try:
+            # Replace fractions and mixed fractions with their float values
+            expr = self.expression
+            fractions = re.findall(r'\d+\s+\d+/\d+|[-]?\d+/\d+', expr)
+            for frac in fractions:
+                try:
+                    float_val = self.parse_fraction(frac)
+                    expr = expr.replace(frac, f"({float_val})")
+                except ValueError as exc:
+                    raise ValueError(f"Invalid fraction in expression: {frac} - {str(exc)}")
+
+            expr = expr.replace("π", str(pi)).replace("e", str(e))  # Use math.e explicitly
+            expr = expr.replace("sin(", f"sin({'pi/180*' if self.angle_mode == 'deg' else ''}")
+            expr = expr.replace("cos(", f"cos({'pi/180*' if self.angle_mode == 'deg' else ''}")
+            expr = expr.replace("tan(", f"tan({'pi/180*' if self.angle_mode == 'deg' else ''}")
+            expr = expr.replace("sin⁻¹(", f"asin({'180/pi*' if self.angle_mode == 'deg' else ''}")
+            expr = expr.replace("cos⁻¹(", f"acos({'180/pi*' if self.angle_mode == 'deg' else ''}")
+            expr = expr.replace("tan⁻¹(", f"atan({'180/pi*' if self.angle_mode == 'deg' else ''}")
+            expr = expr.replace("ln(", "log(")
+            expr = expr.replace("log(", "log10(")
+            expr = expr.replace("e^x", "exp")
+            expr = expr.replace("10^x", "10**")
+            expr = expr.replace("x^y", "**")
+            expr = expr.replace("x²", "**2")
+            expr = expr.replace("!", "factorial")
+            expr = expr.replace("√", "sqrt")
+            expr = expr.replace("%", "/100")
+            result = eval(expr, {"sin": sin, "cos": cos, "tan": tan, "asin": asin, "acos": acos, "atan": atan,
+                                 "log": log, "log10": log10, "exp": exp, "factorial": factorial, "sqrt": sqrt,
+                                 "pi": pi, "e": e}, {})  # Ensure e is in globals
+            if self.fraction_mode and isinstance(result, (int, float)):
+                return self.to_mixed_fraction(result)
+            return round(result, 4) if isinstance(result, (int, float)) else str(result)
+        except Exception as exc:
+            raise ValueError(f"Evaluation error: {str(exc)}")
+
+    def button_click(self, char):
+        if char == "C":
+            self.expression = ""
+            self.display.delete(0, tk.END)
+            self.display.insert(0, "0")
+        elif char == "DEL":
+            self.expression = self.expression[:-1]
+            self.display.delete(0, tk.END)
+            self.display.insert(0, self.expression or "0")
+        elif char == "=":
+            try:
+                result = self.evaluate_expression()
+                self.history.append(f"{self.expression} = {result}")
+                self.update_history()
+                self.expression = str(result)
+                self.display.delete(0, tk.END)
+                self.display.insert(0, self.expression)
+            except Exception as exc:
+                messagebox.showerror("Error", str(exc))
+                self.expression = ""
+                self.display.delete(0, tk.END)
+                self.display.insert(0, "0")
+        elif char in ["M+", "M-", "MR", "MC"]:
+            self.memory_operation(char)
+        elif char == "Matrix":
+            self.matrix_operation()
+        elif char in ["Triangle", "Rectangle", "Circle", "Square"]:
+            self.area_perimeter_operation(char, mode="area" if self.current_mode == "Area" else "perimeter")
+        elif char in ["Cube", "Cuboid", "Sphere", "Cylinder"]:
+            mode = {"TSA": "tsa", "SA": "sa", "Volume": "volume"}.get(self.current_mode, "volume")
+            self.volume_surface_operation(char.lower(), mode)
+        elif char == "Poly":
+            self.solve_polynomial()
+        elif char == "Roots":
+            self.roots_to_polynomial()
+        elif char == "DEG/RAD":
+            self.toggle_mode()
+        elif char == "Frac":
+            self.fraction_mode = not self.fraction_mode
+            self.switch_mode(self.current_mode)  # Update mode label
+        elif char == "Back":
+            self.switch_mode("Basic")
+        else:
+            if self.expression == "0" and char not in ["sin", "cos", "tan", "sin⁻¹", "cos⁻¹", "tan⁻¹", "ln", "log", "e^x", "10^x", "x^y", "!", "π", "e", "√", "x²", "("]:
+                self.expression = ""
+            self.expression += char
+            self.display.delete(0, tk.END)
+            self.display.insert(0, self.expression)
+
+    def memory_operation(self, op):
+        try:
+            value = float(self.evaluate_expression().replace(" ", "").split('=')[-1])
+            if op == "M+":
+                self.memory += value
+            elif op == "M-":
+                self.memory -= value
+            elif op == "MR":
+                self.expression = str(self.memory)
+                self.display.delete(0, tk.END)
+                self.display.insert(0, self.expression)
+            elif op == "MC":
+                self.memory = 0
+        except Exception as exc:
+            messagebox.showerror("Error", f"Invalid Memory Operation: {str(exc)}")
+
+    def toggle_mode(self):
+        if self.current_mode == "Scientific":
+            self.angle_mode = "rad" if self.angle_mode == "deg" else "deg"
+            self.mode_label.configure(text=self.angle_mode.upper() if not self.fraction_mode else "FRAC")
+
+    def solve_polynomial(self):
+        poly_window = ctk.CTkToplevel(self)
+        poly_window.title("Polynomial Solver")
+        poly_window.geometry("300x300")
+        poly_window.resizable(False, False)
+
+        ctk.CTkLabel(poly_window, text="Enter degree of polynomial (1-4)").pack(pady=5)
+        degree_entry = ctk.CTkEntry(poly_window, width=100)
+        degree_entry.pack(pady=2)
+
+        coeff_entries = []
+        def update_coeff_fields():
+            for widget in poly_window.winfo_children()[2:]:  # Skip label and degree entry
+                widget.destroy()
+            try:
+                degree = int(degree_entry.get())
+                if degree < 1 or degree > 4:
+                    raise ValueError("Degree must be 1 to 4")
+                coeff_entries.clear()
+                for i in range(degree + 1):
+                    ctk.CTkLabel(poly_window, text=f"Coefficient of x^{degree-i}:").pack(pady=2)
+                    entry = ctk.CTkEntry(poly_window, width=100)
+                    entry.pack(pady=2)
+                    coeff_entries.append(entry)
+                ctk.CTkButton(poly_window, text="Solve", command=solve).pack(pady=10)
+            except Exception as exc:
+                messagebox.showerror("Error", f"Invalid degree: {str(exc)}")
+
+        ctk.CTkButton(poly_window, text="Set Degree", command=update_coeff_fields).pack(pady=5)
+
+        def solve():
+            try:
+                degree = int(degree_entry.get())
+                coeffs = [self.parse_fraction(entry.get()) for entry in coeff_entries]
+                if len(coeffs) != degree + 1:
+                    raise ValueError("Incorrect number of coefficients")
+                roots = np.roots(coeffs)
+                result = f"Roots: {', '.join([self.to_mixed_fraction(r) if self.fraction_mode else str(round(r, 4)) for r in roots])}"
+                self.history.append(f"Polynomial degree {degree}: {coeffs} = {result}")
+                self.update_history()
+                self.display.delete(0, tk.END)
+                self.display.insert(0, result)
+                messagebox.showinfo("Result", result)
+                poly_window.destroy()
+            except Exception as exc:
+                messagebox.showerror("Error", f"Invalid Input: {str(exc)}")
+
+    def roots_to_polynomial(self):
+        roots_window = ctk.CTkToplevel(self)
+        roots_window.title("Roots to Polynomial")
+        roots_window.geometry("300x300")
+        roots_window.resizable(False, False)
+
+        ctk.CTkLabel(roots_window, text="Enter number of roots (1-4)").pack(pady=5)
+        num_roots_entry = ctk.CTkEntry(roots_window, width=100)
+        num_roots_entry.pack(pady=2)
+
+        root_entries = []
+        def update_root_fields():
+            for widget in roots_window.winfo_children()[2:]:  # Skip label and num roots entry
+                widget.destroy()
+            try:
+                num_roots = int(num_roots_entry.get())
+                if num_roots < 1 or num_roots > 4:
+                    raise ValueError("Number of roots must be 1 to 4")
+                root_entries.clear()
+                for i in range(num_roots):
+                    ctk.CTkLabel(roots_window, text=f"Root {i+1}:").pack(pady=2)
+                    entry = ctk.CTkEntry(roots_window, width=100)
+                    entry.pack(pady=2)
+                    root_entries.append(entry)
+                ctk.CTkButton(roots_window, text="Generate", command=generate).pack(pady=10)
+            except Exception as exc:
+                messagebox.showerror("Error", f"Invalid input: {str(exc)}")
+
+        ctk.CTkButton(roots_window, text="Set Roots", command=update_root_fields).pack(pady=5)
+
+        def generate():
+            try:
+                roots = [self.parse_fraction(entry.get()) for entry in root_entries]
+                coeffs = np.poly(roots)
+                result = " + ".join([f"{self.to_mixed_fraction(c) if self.fraction_mode else str(round(c, 4))}x^{len(coeffs)-1-i}" 
+                                     if i != len(coeffs)-1 else f"{self.to_mixed_fraction(c) if self.fraction_mode else str(round(c, 4))}" 
+                                     for i, c in enumerate(coeffs) if c != 0])
+                self.history.append(f"Roots {roots} => Polynomial: {result}")
+                self.update_history()
+                self.display.delete(0, tk.END)
+                self.display.insert(0, result)
+                messagebox.showinfo("Result", f"Polynomial: {result}")
+                roots_window.destroy()
+            except Exception as exc:
+                messagebox.showerror("Error", f"Invalid Input: {str(exc)}")
+
+    def matrix_operation(self):
+        matrix_window = ctk.CTkToplevel(self)
+        matrix_window.title("Matrix Operations")
+        matrix_window.geometry("500x600")
+        matrix_window.resizable(False, False)
+
+        # Select number of matrices
+        ctk.CTkLabel(matrix_window, text="Number of Matrices (1-3)").pack(pady=5)
+        num_matrices_menu = ctk.CTkOptionMenu(matrix_window, values=["1", "2", "3"], width=100)
+        num_matrices_menu.pack(pady=2)
+
+        # Store matrix dimensions and entries
+        matrix_dims = []  # [(rows, cols), ...]
+        matrix_entries = []  # [[entry list], ...]
+
+        def update_matrix_fields():
+            for widget in matrix_window.winfo_children()[2:]:  # Skip label and num matrices menu
+                widget.destroy()
+            try:
+                num_matrices = int(num_matrices_menu.get())
+                if num_matrices < 1 or num_matrices > 3:
+                    raise ValueError("Number of matrices must be 1 to 3")
+                matrix_dims.clear()
+                matrix_entries.clear()
+
+                # Collect dimensions for each matrix
+                for i in range(num_matrices):
+                    frame = ctk.CTkFrame(matrix_window)
+                    frame.pack(pady=5)
+                    ctk.CTkLabel(frame, text=f"Matrix {i+1} Dimensions").pack(side="left", padx=5)
+                    rows_menu = ctk.CTkOptionMenu(frame, values=["1", "2", "3", "4"], width=100)
+                    rows_menu.pack(side="left", padx=5)
+                    cols_menu = ctk.CTkOptionMenu(frame, values=["1", "2", "3", "4"], width=100)
+                    cols_menu.pack(side="left", padx=5)
+                    matrix_dims.append((rows_menu, cols_menu))
+
+                # Operation selection
+                ctk.CTkLabel(matrix_window, text="Operation").pack(pady=5)
+                operation_menu = ctk.CTkOptionMenu(matrix_window, values=["Add", "Multiply", "Determinant", "Inverse", "Transpose"], width=100)
+                operation_menu.pack(pady=2)
+
+                def generate_entries():
+                    for widget in matrix_window.winfo_children()[num_matrices + 4:]:  # Skip dims and operation
+                        widget.destroy()
+                    matrix_entries.clear()
+                    for i, (rows_menu, cols_menu) in enumerate(matrix_dims):
+                        rows = int(rows_menu.get())
+                        cols = int(cols_menu.get())
+                        if rows < 1 or cols < 1:
+                            raise ValueError(f"Matrix {i+1} dimensions must be at least 1")
+                        ctk.CTkLabel(matrix_window, text=f"Matrix {i+1} Entries").pack(pady=5)
+                        entries = []
+                        for j in range(rows):
+                            row_frame = ctk.CTkFrame(matrix_window)
+                            row_frame.pack(pady=2)
+                            row_entries = []
+                            for k in range(cols):
+                                entry = ctk.CTkEntry(row_frame, width=80)
+                                entry.pack(side="left", padx=2)
+                                row_entries.append(entry)
+                            entries.append(row_entries)
+                        matrix_entries.append(entries)
+                    ctk.CTkButton(matrix_window, text="Compute", command=lambda: compute(operation_menu.get())).pack(pady=10)
+
+                for dim_frame in matrix_dims:
+                    rows_menu, cols_menu = dim_frame
+                    rows_menu.configure(command=lambda x, r=rows_menu, c=cols_menu: generate_entries())
+                    cols_menu.configure(command=lambda x, r=rows_menu, c=cols_menu: generate_entries())
+                generate_entries()
+
+            except Exception as exc:
+                messagebox.showerror("Error", f"Invalid Input: {str(exc)}")
+
+        ctk.CTkButton(matrix_window, text="Set Matrices", command=update_matrix_fields).pack(pady=5)
+
+        def compute(operation):
+            try:
+                matrices = [np.array([[self.parse_fraction(matrix_entries[i][j][k].get()) 
+                                     for k in range(len(matrix_entries[i][j]))] 
+                                     for j in range(len(matrix_entries[i]))]) 
+                           for i in range(len(matrix_entries))]
+                result = None
+                result_str = ""
+                if operation == "Add" and len(matrices) >= 2:
+                    if not all(m.shape == matrices[0].shape for m in matrices):
+                        raise ValueError("All matrices must have the same dimensions for addition")
+                    result = matrices[0]
+                    for m in matrices[1:]:
+                        result = np.add(result, m)
+                    result_str = f"Sum of Matrices:\n{np.round(result, 4)}"
+                elif operation == "Multiply" and len(matrices) >= 2:
+                    result = matrices[0]
+                    for m in matrices[1:]:
+                        if result.shape[1] != m.shape[0]:
+                            raise ValueError("Matrix columns must equal next matrix rows for multiplication")
+                        result = np.dot(result, m)
+                    result_str = f"Product of Matrices:\n{np.round(result, 4)}"
+                elif operation == "Determinant" and len(matrices) == 1:
+                    if matrices[0].shape[0] != matrices[0].shape[1]:
+                        raise ValueError("Matrix must be square for determinant")
+                    result = np.linalg.det(matrices[0])
+                    result_str = f"Determinant: {self.to_mixed_fraction(result) if self.fraction_mode else round(result, 4)}"
+                elif operation == "Inverse" and len(matrices) == 1:
+                    if matrices[0].shape[0] != matrices[0].shape[1]:
+                        raise ValueError("Matrix must be square for inverse")
+                    result = np.linalg.inv(matrices[0])
+                    result_str = f"Inverse:\n{np.round(result, 4)}"
+                elif operation == "Transpose" and len(matrices) == 1:
+                    result = np.transpose(matrices[0])
+                    result_str = f"Transpose:\n{np.round(result, 4)}"
+                else:
+                    raise ValueError(f"Invalid operation '{operation}' for {len(matrices)} matrices")
+                self.history.append(result_str)
+                self.update_history()
+                self.display.delete(0, tk.END)
+                self.display.insert(0, result_str)
+                messagebox.showinfo("Result", result_str)
+                matrix_window.destroy()
+            except Exception as exc:
+                messagebox.showerror("Error", f"Invalid Matrix Operation: {str(exc)}")
+
+    def area_perimeter_operation(self, shape, mode):
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(f"{shape} {mode.capitalize()}")
+        dialog.geometry("300x200")
+        dialog.resizable(False, False)
+
+        entries = []
+        if shape == "Triangle":
+            if mode == "area":
+                ctk.CTkLabel(dialog, text="Base:").pack(pady=2)
+                entries.append(ctk.CTkEntry(dialog, width=100))
+                entries[-1].pack(pady=2)
+                ctk.CTkLabel(dialog, text="Height:").pack(pady=2)
+                entries.append(ctk.CTkEntry(dialog, width=100))
+                entries[-1].pack(pady=2)
+            else:
+                ctk.CTkLabel(dialog, text="Side 1:").pack(pady=2)
+                entries.append(ctk.CTkEntry(dialog, width=100))
+                entries[-1].pack(pady=2)
+                ctk.CTkLabel(dialog, text="Side 2:").pack(pady=2)
+                entries.append(ctk.CTkEntry(dialog, width=100))
+                entries[-1].pack(pady=2)
+                ctk.CTkLabel(dialog, text="Side 3:").pack(pady=2)
+                entries.append(ctk.CTkEntry(dialog, width=100))
+                entries[-1].pack(pady=2)
+        elif shape in ["Rectangle", "Square"]:
+            ctk.CTkLabel(dialog, text="Length:").pack(pady=2)
+            entries.append(ctk.CTkEntry(dialog, width=100))
+            entries[-1].pack(pady=2)
+            if shape == "Rectangle":
+                ctk.CTkLabel(dialog, text="Width:").pack(pady=2)
+                entries.append(ctk.CTkEntry(dialog, width=100))
+                entries[-1].pack(pady=2)
+        elif shape == "Circle":
+            ctk.CTkLabel(dialog, text="Radius:").pack(pady=2)
+            entries.append(ctk.CTkEntry(dialog, width=100))
+            entries[-1].pack(pady=2)
+
+        def compute():
+            try:
+                values = [self.parse_fraction(entry.get()) for entry in entries]
+                if shape == "Triangle":
+                    if mode == "area":
+                        base, height = values
+                        result = 0.5 * base * height
+                    else:
+                        result = sum(values)
+                elif shape == "Rectangle":
+                    length, width = values
+                    result = length * width if mode == "area" else 2 * (length + width)
+                elif shape == "Square":
+                    side = values[0]
+                    result = side ** 2 if mode == "area" else 4 * side
+                elif shape == "Circle":
+                    radius = values[0]
+                    result = pi * radius ** 2 if mode == "area" else 2 * pi * radius
+                result_str = f"{shape} {mode}: {self.to_mixed_fraction(result) if self.fraction_mode else round(result, 4)}"
+                self.history.append(result_str)
+                self.update_history()
+                self.display.delete(0, tk.END)
+                self.display.insert(0, result_str)
+                messagebox.showinfo("Result", result_str)
+                dialog.destroy()
+            except Exception as exc:
+                messagebox.showerror("Error", f"Invalid Input: {str(exc)}")
+
+        ctk.CTkButton(dialog, text="Calculate", command=compute).pack(pady=10)
+
+    def volume_surface_operation(self, shape, mode):
+        dialog = ctk.CTkToplevel(self)
+        dialog.title(f"{shape.capitalize()} {mode.upper()}")
+        dialog.geometry("300x200")
+        dialog.resizable(False, False)
+
+        entries = []
+        if shape == "cube":
+            ctk.CTkLabel(dialog, text="Side:").pack(pady=2)
+            entries.append(ctk.CTkEntry(dialog, width=100))
+            entries[-1].pack(pady=2)
+        elif shape == "cuboid":
+            ctk.CTkLabel(dialog, text="Length:").pack(pady=2)
+            entries.append(ctk.CTkEntry(dialog, width=100))
+            entries[-1].pack(pady=2)
+            ctk.CTkLabel(dialog, text="Width:").pack(pady=2)
+            entries.append(ctk.CTkEntry(dialog, width=100))
+            entries[-1].pack(pady=2)
+            ctk.CTkLabel(dialog, text="Height:").pack(pady=2)
+            entries.append(ctk.CTkEntry(dialog, width=100))
+            entries[-1].pack(pady=2)
+        elif shape == "sphere":
+            ctk.CTkLabel(dialog, text="Radius:").pack(pady=2)
+            entries.append(ctk.CTkEntry(dialog, width=100))
+            entries[-1].pack(pady=2)
+        elif shape == "cylinder":
+            ctk.CTkLabel(dialog, text="Radius:").pack(pady=2)
+            entries.append(ctk.CTkEntry(dialog, width=100))
+            entries[-1].pack(pady=2)
+            ctk.CTkLabel(dialog, text="Height:").pack(pady=2)
+            entries.append(ctk.CTkEntry(dialog, width=100))
+            entries[-1].pack(pady=2)
+
+        def compute():
+            try:
+                values = [self.parse_fraction(entry.get()) for entry in entries]
+                if shape == "cube":
+                    side = values[0]
+                    if mode == "volume":
+                        result = side ** 3
+                    elif mode == "sa":
+                        result = 6 * side ** 2
+                    else:  # tsa
+                        result = 6 * side ** 2
+                elif shape == "cuboid":
+                    length, width, height = values
+                    if mode == "volume":
+                        result = length * width * height
+                    elif mode == "sa":
+                        result = 2 * (length * width + width * height + height * length)
+                    else:  # tsa
+                        result = 2 * (length * width + width * height + height * length)
+                elif shape == "sphere":
+                    radius = values[0]
+                    if mode == "volume":
+                        result = (4/3) * pi * radius ** 3
+                    elif mode == "sa":
+                        result = 4 * pi * radius ** 2
+                    else:  # tsa
+                        result = 4 * pi * radius ** 2
+                elif shape == "cylinder":
+                    radius, height = values
+                    if mode == "volume":
+                        result = pi * radius ** 2 * height
+                    elif mode == "sa":
+                        result = 2 * pi * radius * height
+                    else:  # tsa
+                        result = 2 * pi * radius * (radius + height)
+                result_str = f"{shape.capitalize()} {mode.upper()}: {self.to_mixed_fraction(result) if self.fraction_mode else round(result, 4)}"
+                self.history.append(result_str)
+                self.update_history()
+                self.display.delete(0, tk.END)
+                self.display.insert(0, result_str)
+                messagebox.showinfo("Result", result_str)
+                dialog.destroy()
+            except Exception as exc:
+                messagebox.showerror("Error", f"Invalid Input: {str(exc)}")
+
+        ctk.CTkButton(dialog, text="Calculate", command=compute).pack(pady=10)
+
+    def update_history(self):
+        self.history_text.configure(state="normal")
+        self.history_text.delete("1.0", tk.END)
+        self.history_text.insert("end", "History:\n")
+        for entry in self.history[-5:]:  # Show last 5 entries
+            self.history_text.insert("end", f"{entry}\n")
+        self.history_text.configure(state="disabled")
+
+if __name__ == "__main__":
+    app = ScientificCalculator()
+    app.mainloop()
